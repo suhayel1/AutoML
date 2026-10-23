@@ -49,8 +49,6 @@ uvicorn server:app --port 8000
 
 Then open <http://localhost:8000>.
 
-To share a temporary public link for a demo, install [cloudflared](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/) and run `cloudflared tunnel --url http://localhost:8000` in a second terminal. The link only works while this computer is on and both commands are running.
-
 ## Tested with
 
 Kaggle datasets: Spotify Most Streamed Songs 2024, Amazon Sale Report (129k rows), Top 100 Trending Books, and a pipe-separated grocery bestseller file. Testing these found and fixed several issues: pipe separators, numbers with commas, True/False columns, file encoding and duplicate rows.

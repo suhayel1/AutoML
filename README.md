@@ -4,7 +4,7 @@ Upload a spreadsheet (CSV), pick the column you want to predict, and the app cle
 
 > **Status: work in progress.** This is an early prototype for internal review. It runs on one machine, has no login, and should not be used with confidential data yet.
 
-<img src="docs/results.png" alt="Example results page" width="600">
+![Example results page](docs/results.png)
 
 ## What it does
 

@@ -34,6 +34,14 @@
             <p class="error" id="target-error" role="alert"></p>
           </div>
 
+          <div class="field" id="columns-field" hidden>
+            <details id="columns-box">
+              <summary>Columns the model can use <span id="columns-count" class="hint"></span></summary>
+              <p class="hint">Untick anything the model shouldn't see, such as columns that are only filled in after the outcome is known.</p>
+              <div id="column-list" class="column-list"></div>
+            </details>
+          </div>
+
           <fieldset>
             <legend>Type of prediction</legend>
             <label class="choice"><input type="radio" name="task" value="auto" checked> Detect automatically</label>

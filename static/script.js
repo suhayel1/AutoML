@@ -1,168 +1,94 @@
-const $ = (id) => document.getElementById(id);
-const POLL_MS = 2000;
-let timer = null;
-
-const escapeHtml = (s) => String(s).replace(/[&<>"']/g,
-  (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
-
-function setStatus(state, text) {
-  $("status").dataset.state = state;
-  $("status-text").textContent = text;
+:root {
+  --bg: #F6F7F9; --surface: #FFFFFF; --ink: #1B2230; --muted: #5B6474; --line: #DDE1E7;
+  --accent: #2B59C3; --accent-ink: #FFFFFF; --danger: #B42318; --success: #1F7A4D;
+  --warn: #9A6700; --warn-bg: #FFF8E5; --ok-bg: #EEF7F1;
+  --radius: 10px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
-
-// Guess the separator: the one that splits the first lines into the same number of pieces most often.
-function detectDelimiter(text) {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim()).slice(0, 10);
-  let best = ",", bestScore = 0;
-  for (const d of [",", ";", "\t", "|"]) {
-    const counts = lines.map((l) => l.split(d).length - 1);
-    if (!counts[0]) continue;
-    const score = counts.filter((n) => n === counts[0]).length * 1000 + counts[0];
-    if (score > bestScore) { best = d; bestScore = score; }
-  }
-  return best;
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #12161D; --surface: #1A2029; --ink: #E7EAF0; --muted: #9AA3B2; --line: #2C3441;
+          --accent: #7C9CF0; --accent-ink: #0E1320; --danger: #F07A6E; --success: #5CC08E;
+          --warn: #E3B341; --warn-bg: #2A2416; --ok-bg: #16261D; }
 }
-
-// Small CSV reader for the preview only (handles quoted fields). The server does the real reading.
-function parseCSV(text, delimiter = ",", maxRows = 6) {
-  const rows = []; let row = [], field = "", inQuotes = false;
-  for (let i = 0; i < text.length && rows.length < maxRows; i++) {
-    const c = text[i];
-    if (inQuotes) {
-      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
-      else if (c === '"') inQuotes = false;
-      else field += c;
-    } else if (c === '"') inQuotes = true;
-    else if (c === delimiter) { row.push(field); field = ""; }
-    else if (c === "\n" || c === "\r") {
-      if (c === "\r" && text[i + 1] === "\n") i++;
-      row.push(field); rows.push(row); row = []; field = "";
-    } else field += c;
-  }
-  if (rows.length < maxRows && (field || row.length)) { row.push(field); rows.push(row); }
-  return rows;
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; font-family: var(--font); line-height: 1.6; color: var(--ink); background: var(--bg); }
+.container { max-width: 1080px; margin: 0 auto; padding: 0 1.5rem; }
+header { background: var(--surface); border-bottom: 1px solid var(--line); }
+header .container { min-height: 60px; display: flex; align-items: center; font-weight: 600; }
+.intro { padding: 2.5rem 0 1.5rem; }
+.intro h1 { margin: 0 0 .4rem; font-size: clamp(1.6rem, 1.2rem + 1.5vw, 2.2rem); line-height: 1.2; }
+.intro p { margin: 0; color: var(--muted); max-width: 62ch; }
+.layout { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 1.5rem; padding-bottom: 3rem; }
+@media (max-width: 820px) { .layout { grid-template-columns: 1fr; } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.5rem; }
+h2 { margin: 0 0 1rem; font-size: 1.15rem; }
+.field { margin-bottom: 1.2rem; }
+label, legend { display: block; font-weight: 500; margin-bottom: .35rem; }
+.hint { font-size: .875rem; color: var(--muted); margin: .3rem 0 0; }
+.error { font-size: .875rem; color: var(--danger); margin: .3rem 0 0; }
+.error:empty { display: none; }
+input[type="file"], select, input[type="number"] {
+  width: 100%; font: inherit; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 6px; padding: .55rem .7rem;
 }
-
-function previewTable(rows) {
-  const [header, ...body] = rows;
-  return `<div class="table-wrap"><table>
-    <thead><tr>${header.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead>
-    <tbody>${body.map((r) => `<tr>${r.map((v) => `<td>${escapeHtml(v)}</td>`).join("")}</tr>`).join("")}</tbody>
-  </table></div>`;
+fieldset { border: 0; padding: 0; margin: 0 0 1.2rem; }
+.choice { display: flex; align-items: center; gap: .5rem; font-weight: 400; margin-bottom: .2rem; }
+button { font: inherit; font-weight: 500; cursor: pointer; border-radius: 6px; padding: .65rem 1.1rem;
+         border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); }
+button:disabled { opacity: .55; cursor: not-allowed; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.status { display: flex; align-items: center; gap: .6rem; margin-bottom: 1rem; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--line); flex: none; }
+.status[data-state="running"] .dot { background: var(--accent); }
+.status[data-state="done"] .dot { background: var(--success); }
+.status[data-state="error"] .dot { background: var(--danger); }
+.status[data-state="error"] { color: var(--danger); }
+.empty { border: 1px dashed var(--line); border-radius: var(--radius); padding: 2rem; text-align: center; color: var(--muted); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+th, td { text-align: left; padding: .5rem .7rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-weight: 500; background: var(--bg); }
+tr:last-child td { border-bottom: 0; }
+.headline { font-size: 1.15rem; font-weight: 600; margin: 0 0 .75rem; white-space: pre-line; }
+.facts { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; margin: 0 0 1.25rem; padding: 0; list-style: none; color: var(--muted); }
+.facts strong { color: var(--ink); font-weight: 500; }
+h3 { font-size: 1rem; margin: 1.25rem 0 .5rem; }
+.cleaning dt { font-weight: 500; margin-top: .6rem; }
+.cleaning dd { margin: .1rem 0 0; color: var(--muted); }
+.importance { list-style: none; margin: .75rem 0 0; padding: 0; }
+.importance li { display: grid; grid-template-columns: minmax(0, 12rem) 1fr 2.75rem; align-items: center; gap: .75rem; padding: .25rem 0; }
+.imp-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-bar { height: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.imp-bar span { display: block; height: 100%; background: var(--accent); }
+.imp-value { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 480px) {
+  .importance li { grid-template-columns: 1fr 2.75rem; row-gap: .2rem; }
+  .imp-name { grid-column: 1 / -1; }
 }
-
-// When a file is chosen: preview it and fill the target dropdown (alphabetical, ignoring case).
-$("file").addEventListener("change", async (e) => {
-  $("file-error").textContent = "";
-  const file = e.target.files[0];
-  if (!file) return;
-  if (!file.name.toLowerCase().endsWith(".csv")) {
-    $("file-error").textContent = "Choose a .csv file.";
-    return;
-  }
-  const text = await file.slice(0, 200000).text();
-  const rows = parseCSV(text, detectDelimiter(text));
-  if (rows.length < 2) {
-    $("file-error").textContent = "This file needs a header row and at least one data row.";
-    return;
-  }
-  // Blank headers get the same name pandas gives them on the server ("Unnamed: 0")
-  rows[0] = rows[0].map((c, i) => c.trim() || `Unnamed: ${i}`);
-  // Skip those columns in the dropdown: they're dropped before training anyway
-  const columns = rows[0].filter((c) => !c.startsWith("Unnamed:")).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
-  $("target").innerHTML = '<option value="">Choose a column</option>' +
-    columns.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
-  $("target").disabled = false;
-  $("results").innerHTML = previewTable(rows);
-  setStatus("idle", `Loaded ${file.name}. Showing the first rows.`);
-});
-
-$("target").addEventListener("change", () => { $("target-error").textContent = ""; });
-
-// Submit: send the file to Python, get a job id back, then check on the job every few seconds.
-$("train-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const file = $("file").files[0];
-  let valid = true;
-  if (!file) { $("file-error").textContent = "Choose a CSV file first."; valid = false; }
-  if (!$("target").value) { $("target-error").textContent = "Choose the column to predict."; valid = false; }
-  if (!valid) return;
-
-  $("submit-btn").disabled = true;
-  setStatus("running", "Uploading...");
-  try {
-    const response = await fetch("/api/train", { method: "POST", body: new FormData($("train-form")) });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || `Upload failed (HTTP ${response.status}).`);
-    pollJob(data.job_id, Date.now());
-  } catch (err) {
-    finish("error", err instanceof TypeError ? "Couldn't reach the server. Is uvicorn still running?" : err.message);
-  }
-});
-
-async function pollJob(jobId, startedAt) {
-  try {
-    const response = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`);
-    const job = await response.json();
-    if (!response.ok) throw new Error(job.detail || `Status check failed (HTTP ${response.status}).`);
-
-    if (job.status === "done") {
-      showResult(job.result);
-      finish("done", "Training finished");
-    } else if (job.status === "error") {
-      finish("error", job.message || "Training failed.");
-    } else {
-      const seconds = Math.round((Date.now() - startedAt) / 1000);
-      setStatus("running", `Training... ${seconds}s`);
-      timer = setTimeout(() => pollJob(jobId, startedAt), POLL_MS);
-    }
-  } catch (err) {
-    finish("error", err instanceof TypeError ? "Lost contact with the server." : err.message);
-  }
-}
-
-function finish(state, text) {
-  clearTimeout(timer);
-  setStatus(state, text);
-  $("submit-btn").disabled = false;
-}
-
-function stepsList(steps) {
-  const entries = Object.entries(steps || {});
-  if (!entries.length) return `<p class="hint">No changes were needed.</p>`;
-  return `<dl class="cleaning">${entries.map(([step, cols]) =>
-    `<dt>${escapeHtml(step)}</dt><dd>${cols.map(escapeHtml).join(", ")}</dd>`).join("")}</dl>`;
-}
-
-function importanceList(items) {
-  if (!items || !items.length) return `<p class="hint">No single column made a clear difference.</p>`;
-  const top = items.slice(0, 10), max = top[0].share;
-  const pct = (share) => share < 0.005 ? "<1%" : `${Math.round(share * 100)}%`;
-  const rest = items.length - top.length;
-  return `<ol class="importance">${top.map((i) => `
-    <li title="${escapeHtml(i.column)}">
-      <span class="imp-name">${escapeHtml(i.column)}</span>
-      <span class="imp-bar"><span style="width:${(i.share / max * 100).toFixed(1)}%"></span></span>
-      <span class="imp-value">${pct(i.share)}</span>
-    </li>`).join("")}</ol>` +
-    (rest > 0 ? `<p class="hint">${rest} other column${rest > 1 ? "s" : ""} had a smaller effect.</p>` : "");
-}
-
-function showResult(r) {
-  const task = r.task === "classification" ? "Category" : "Number";
-  $("results").innerHTML = `
-    <p class="headline">${escapeHtml(r.summary)}</p>
-    <ul class="facts">
-      <li>Predicting: <strong>${escapeHtml(r.target)}</strong></li>
-      <li>Type: <strong>${task}</strong></li>
-      <li>Best model: <strong>${escapeHtml(r.best_model)}</strong></li>
-      <li>Rows used: <strong>${Number(r.rows_used).toLocaleString()}</strong></li>
-    </ul>
-    <h3>How your data was cleaned:</h3>
-    ${stepsList(r.cleaning)}
-    <h3>How your data was prepared for the model:</h3>
-    ${stepsList(r.engineering)}
-    <h3>What mattered most:</h3>
-    <p class="hint">How much the predictions relied on each column. Measured by mixing up one column's values at a time and seeing how much worse the predictions got.</p>
-    ${importanceList(r.importance)}`;
-}
+details summary { cursor: pointer; font-weight: 500; }
+.column-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: .1rem .75rem;
+               max-height: 15rem; overflow-y: auto; margin-top: .5rem; padding: .5rem; border: 1px solid var(--line); border-radius: 6px; }
+.column-list .choice { margin: 0; overflow-wrap: anywhere; }
+.notice { border: 1px solid var(--line); border-left-width: 4px; border-radius: 6px; padding: .75rem 1rem; margin: 0 0 1.25rem; }
+.notice-warn { border-left-color: var(--warn); background: var(--warn-bg); }
+.notice-ok { border-left-color: var(--success); background: var(--ok-bg); color: var(--muted); font-size: .9rem; }
+.notice h3 { margin: 0 0 .4rem; }
+.notice ul { margin: 0; padding-left: 1.1rem; }
+.notice li { margin-bottom: .45rem; }
+.link-btn { font-size: .85rem; padding: .15rem .6rem; margin-left: .25rem; background: transparent; color: var(--accent); }
+.link-btn:hover { background: var(--accent); color: var(--accent-ink); }
+.button-link { display: inline-block; font-weight: 500; text-decoration: none; border-radius: 6px; padding: .5rem 1rem;
+               border: 1px solid var(--accent); color: var(--accent); margin: 0 0 .5rem; }
+.button-link:hover { background: var(--accent); color: var(--accent-ink); }
+.progress-steps { list-style: none; margin: 0; padding: 0; }
+.progress-steps li { position: relative; padding: .3rem 0 .3rem 1.9rem; color: var(--muted); }
+.progress-steps li::before { content: ""; position: absolute; left: .2rem; top: .62rem; width: .9rem; height: .9rem;
+                             border-radius: 50%; border: 2px solid var(--line); box-sizing: border-box; }
+.progress-steps li.done { color: var(--ink); }
+.progress-steps li.done::before { content: "✓"; border-color: var(--success); background: var(--success); color: var(--surface);
+                                  font-size: .6rem; line-height: .6rem; text-align: center; font-weight: 700; padding-top: .08rem; }
+.progress-steps li.current { color: var(--ink); font-weight: 600; }
+.progress-steps li.current::before { border-color: var(--accent); background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .progress-steps li.current::before { animation: none; } }
+[hidden] { display: none !important; }
